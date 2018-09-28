@@ -1,0 +1,60 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "cert-broker.fullname" . }}
+  namespace: "{{ .Values.certbroker.namespace }}"
+  labels:
+    app: {{ template "cert-broker.name" . }}
+    chart: {{ template "cert-broker.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "cert-broker.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "cert-broker.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+          {{- if .Values.certbroker.controlClusterSecret }}
+          - name: control-cluster
+            mountPath: "/etc/control-cluster"
+            readOnly: true
+          {{- end }}
+          - name: target-cluster
+            mountPath: "/etc/target-cluster"
+            readOnly: true
+          args:
+          {{- if .Values.certbroker.controlClusterSecret }}
+          - --control-cluster-kube-config=/etc/control-cluster/kubeconfig
+          {{- end }}
+          - --target-cluster-kube-config=/etc/target-cluster/kubeconfig
+          - --resource-namespace={{ .Values.certbroker.namespace }}
+          - --ingress-workers={{ .Values.certbroker.replicaWorkers }}
+          - --secret-workers={{ .Values.certbroker.replicaWorkers }}
+          - --cleanup-workers={{ .Values.certbroker.cleanupWorkers }}
+          - --cluster-issuer={{ .Values.certmanager.clusterissuer }}
+          - --acme-challenge-type={{ .Values.certmanager.acmeChallengeType }}
+          - --acme-dns01-provider={{ .Values.certmanager.acmeDNS01Provider }}
+          - --update-ingress={{ .Values.certmanager.updateIngress }}
+          - --leader-election={{ .Values.certmanager.leaderElection }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      {{- if .Values.certbroker.controlClusterSecret }}
+      - name: control-cluster
+        secret:
+          secretName: {{ .Values.certbroker.controlClusterSecret }}
+      {{- end }}
+      - name: target-cluster
+        secret:
+          secretName: {{ .Values.certbroker.targetClusterSecret }}
