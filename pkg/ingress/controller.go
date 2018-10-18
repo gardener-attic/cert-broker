@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gardener/cert-broker/pkg/utils"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,8 +30,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const controllerAgentName = "ingress-controller"
