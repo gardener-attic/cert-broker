@@ -9,11 +9,11 @@ required = [
   "k8s.io/gengo/args",
 ]
 
-[[override]]
+[[constraint]]
   name = "k8s.io/code-generator"
   version = "kubernetes-1.11.0"
 
-[[override]]
+[[constraint]]
   name = "k8s.io/api"
   version = "kubernetes-1.11.0"
 
@@ -21,7 +21,7 @@ required = [
   name = "k8s.io/client-go"
   version = "kubernetes-1.11.0"
 
-[[override]]
+[[constraint]]
   name = "k8s.io/apimachinery"
   version = "kubernetes-1.11.0"
 
@@ -29,7 +29,7 @@ required = [
   name = "github.com/spf13/cobra"
   version = "^0.0.1"
 
-[[override]]
+[[constraint]]
   name = "github.com/sirupsen/logrus"
   version = "^v1.0.6"
 

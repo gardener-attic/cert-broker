@@ -23,13 +23,19 @@ import (
 	"time"
 
 	"github.com/gardener/cert-broker/pkg/cleaner"
+	"github.com/gardener/cert-broker/pkg/events"
 	"github.com/gardener/cert-broker/pkg/ingress"
 	"github.com/gardener/cert-broker/pkg/secret"
 	"github.com/gardener/cert-broker/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -67,7 +73,21 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 	targetClientInformerFactory := informers.NewSharedInformerFactory(targetClusterClient, time.Second*30)
 	controlClientInformerFactory := informers.NewSharedInformerFactory(controlClusterClient, time.Second*30)
 
-	controlClientInformerFactory.Extensions().V1beta1().Ingresses().Lister()
+	dynControlClient, err := dynamic.NewForConfig(controlClusterConfig)
+	if err != nil {
+		return fmt.Errorf("error getting clientset instance for control cluster: %v", err)
+	}
+
+	certificatesInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
+		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			return dynControlClient.Resource(utils.CertGvr).List(options)
+		},
+		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			return dynControlClient.Resource(utils.CertGvr).Watch(options)
+		},
+	}, nil, time.Second*30, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+
+	certificatesLister := cache.NewGenericLister(certificatesInformer.GetIndexer(), utils.CertGvr.GroupResource())
 
 	ingressTemplate := utils.CreateIngressTemplate(
 		cb.ControllerOptions.ClusterIssuer,
@@ -126,9 +146,25 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		},
 	)
 
+	eventController := events.NewController(
+		&events.ControlClusterContext{
+			EventInformer:      controlClientInformerFactory.Core().V1().Events().Informer(),
+			EventLister:        controlClientInformerFactory.Core().V1().Events().Lister(),
+			EventSync:          controlClientInformerFactory.Core().V1().Events().Informer().HasSynced,
+			CertificatesLister: certificatesLister,
+			CertificatesSync:   certificatesInformer.HasSynced,
+		},
+		&events.TargetClusterContext{
+			Client:        targetClusterClient,
+			IngressLister: targetClientInformerFactory.Extensions().V1beta1().Ingresses().Lister(),
+			IngressSync:   targetClientInformerFactory.Extensions().V1beta1().Ingresses().Informer().HasSynced,
+		},
+	)
+
 	run := func(_ <-chan struct{}) {
 		targetClientInformerFactory.Start(stopCh)
 		controlClientInformerFactory.Start(stopCh)
+		go certificatesInformer.Run(stopCh)
 
 		var controllerWg sync.WaitGroup
 
@@ -153,6 +189,14 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 			controllerWg.Add(1)
 			if err := ingressCleaner.Start(int(cb.ControllerOptions.CleanupWorkerCount), stopCh); err != nil {
 				logger.Errorf("error starting the ingress cleaner: %v", err)
+			}
+		}()
+
+		go func() {
+			defer controllerWg.Done()
+			controllerWg.Add(1)
+			if err := eventController.Start(int(cb.ControllerOptions.CleanupWorkerCount), stopCh); err != nil {
+				logger.Errorf("error starting the event controlle: %v", err)
 			}
 		}()
 
