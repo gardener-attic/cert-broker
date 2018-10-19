@@ -15,15 +15,14 @@
 package events
 
 import (
-	"time"
+	"strconv"
 
+	"github.com/gardener/cert-broker/pkg/utils"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
-
-const gracePeriod = time.Minute
 
 // EventHandler dispatches events to a queue of type RateLimitingInterface.
 type EventHandler struct {
@@ -33,8 +32,14 @@ type EventHandler struct {
 // OnAdd events are ignored yet.
 func (e *EventHandler) OnAdd(obj interface{}) {
 	event := obj.(*v1.Event)
-	if event.LastTimestamp.Add(gracePeriod).After(time.Now()) {
+	if event.Annotations == nil {
 		e.addToQueue(obj)
+	}
+	lastCount, err := strconv.ParseInt(event.Annotations[utils.GardenCount], 10, 32)
+	if err == nil {
+		if event.Count > int32(lastCount) {
+			e.addToQueue(obj)
+		}
 	}
 }
 

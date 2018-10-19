@@ -152,6 +152,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 			EventInformer:      controlClientInformerFactory.Core().V1().Events().Informer(),
 			EventLister:        controlClientInformerFactory.Core().V1().Events().Lister(),
 			EventSync:          controlClientInformerFactory.Core().V1().Events().Informer().HasSynced,
+			Client:             controlClusterClient,
 			CertificatesLister: certificatesLister,
 			CertificatesSync:   certificatesInformer.HasSynced,
 		},
