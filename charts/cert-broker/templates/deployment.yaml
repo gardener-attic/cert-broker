@@ -47,6 +47,12 @@ spec:
           - --acme-dns01-provider={{ .Values.certmanager.acmeDNS01Provider }}
           - --update-ingress={{ .Values.certmanager.updateIngress }}
           - --leader-election={{ .Values.certmanager.leaderElection }}
+          {{- if not .Values.certbroker.managedDomains }}
+          {{- required "Managed domains must be provided" .Values.certbroker.managedDomains }}
+          {{- end }}
+          {{- range .Values.certbroker.managedDomains }}
+          - --managed-domain={{ . }}
+          {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       volumes:

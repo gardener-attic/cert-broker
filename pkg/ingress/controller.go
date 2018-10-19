@@ -41,6 +41,7 @@ type Controller struct {
 	controlCtx      *ControlClusterContext
 	targetCtx       *TargetClusterContext
 	ingressTemplate *utils.IngressTemplate
+	managedDomains  []string
 	workqueue       workqueue.RateLimitingInterface
 	recorder        record.EventRecorder
 	workerwg        sync.WaitGroup
@@ -67,13 +68,14 @@ type TargetClusterContext struct {
 
 // NewController creates a new instance of Controller which in turn
 // is capable of replicating Ingress resources.
-func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext, ingressTemplate *utils.IngressTemplate) *Controller {
+func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext, ingressTemplate *utils.IngressTemplate, managedDomains []string) *Controller {
 	controller := &Controller{
 		controlCtx:      controlCtx,
 		targetCtx:       targetCtx,
 		ingressTemplate: ingressTemplate,
+		managedDomains:  managedDomains,
 		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Ingresses"),
-		recorder:        utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Controll"),
+		recorder:        utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Control"),
 	}
 	controller.targetCtx.IngressInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: utils.FilterOnIngressLables,
@@ -172,7 +174,7 @@ func (c *Controller) syncHandler(key string) error {
 	controlIngress, err := c.controlCtx.IngressLister.Ingresses(c.controlCtx.ResourceNamespace).Get(controlIngressName)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			_, err := c.createIngress(controlIngressName, targetIngress)
+			err := c.createIngress(controlIngressName, targetIngress)
 			return err
 		}
 		return err
