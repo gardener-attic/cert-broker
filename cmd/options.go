@@ -30,6 +30,8 @@ const (
 	defaultAcmeChallenge        = "dns01"
 )
 
+var defaultManagedDomains = []string{}
+
 // Options represent configuration settings for a running instance of Cert-Broker.
 type Options struct {
 	TargetClusterKubeconf  string
@@ -38,11 +40,13 @@ type Options struct {
 	ClusterIssuer          string
 	AcmeChallengeType      string
 	AcmeDNS01Provider      string
+	ManagedDomains         []string
 	UpdateControlIngress   bool
 	LeaderElection         bool
 	IngressWorkerCount     uint
 	SecretWorkerCount      uint
 	CleanupWorkerCount     uint
+	EventWorkerCount       uint
 	SyncInterval           time.Duration
 }
 
@@ -59,6 +63,8 @@ func (options *Options) addFlags(fs *pflag.FlagSet) {
 		"ACME challenge type to be set in replicated Ingress")
 	fs.StringVar(&options.AcmeDNS01Provider, "acme-dns01-provider", "", ""+
 		"Name of the DNS01 provider if ACME challenge type is DNS01")
+	fs.StringArrayVar(&options.ManagedDomains, "managed-domain", defaultManagedDomains, ""+
+		"A list of domains being considerd by Cert-Broker. Domains apart from that list will be ignored.")
 	fs.BoolVar(&options.UpdateControlIngress, "update-ingress", defaultUpdateContronIngress, ""+
 		"Determins whether existing Ingress resources in the control cluster should be updated."+
 		"Needed if issuer information has changed.")
@@ -72,6 +78,8 @@ func (options *Options) addFlags(fs *pflag.FlagSet) {
 		"Worker count for the Secret replication")
 	fs.UintVar(&options.CleanupWorkerCount, "cleanup-workers", defaultCleanupCount, ""+
 		"Worker count for the Ingress clean-up")
+	fs.UintVar(&options.EventWorkerCount, "event-workers", defaultWorkerCount, ""+
+		"Worker count for the Event propagation")
 }
 
 // NewControllerOptions adds configured flags and returns a pointer to a newly created Options struct.

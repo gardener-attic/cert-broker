@@ -73,7 +73,7 @@ func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterCo
 		controlCtx: controlCtx,
 		targetCtx:  targetCtx,
 		workqueue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Events"),
-		recorder:   utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Controll"),
+		recorder:   utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Control"),
 	}
 	handler.controlCtx.EventInformer.AddEventHandler(&cache.FilteringResourceEventHandler{
 		FilterFunc: certificateIsInvolved,

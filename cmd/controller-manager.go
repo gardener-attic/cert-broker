@@ -111,6 +111,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 			IngressSync:     targetClientInformerFactory.Extensions().V1beta1().Ingresses().Informer().HasSynced,
 		},
 		ingressTemplate,
+		cb.ControllerOptions.ManagedDomains,
 	)
 
 	ingressCleaner := cleaner.NewController(
@@ -195,7 +196,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		go func() {
 			defer controllerWg.Done()
 			controllerWg.Add(1)
-			if err := eventController.Start(int(cb.ControllerOptions.CleanupWorkerCount), stopCh); err != nil {
+			if err := eventController.Start(int(cb.ControllerOptions.EventWorkerCount), stopCh); err != nil {
 				logger.Errorf("error starting the event controlle: %v", err)
 			}
 		}()

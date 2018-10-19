@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gardener/cert-broker/pkg/utils"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -27,8 +28,6 @@ import (
 	lv1beta1 "k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -173,6 +172,9 @@ func (c *Controller) syncHandler(key string) (bool, error) {
 
 	controlIngress, err := c.controlCtx.IngressLister.Ingresses(namespace).Get(name)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
 		return true, err
 	}
 

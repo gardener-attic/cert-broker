@@ -16,6 +16,7 @@ package ingress
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/gardener/cert-broker/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -34,11 +35,13 @@ func (c *Controller) cleanUpIngressAndSecrets(name string) error {
 	return utils.CleanUpIngressAndTLSSecrets(c.controlCtx.Client, ingress, logger)
 }
 
-func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) (*extv1beta1.Ingress, error) {
+func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) error {
 	// Prefix every secret name of the TLS section with the control cluster convention,
 	// so we can assign created secret in the control cluster back to target cluster.
-	tls := make([]extv1beta1.IngressTLS, len(source.Spec.TLS))
-	copy(tls, source.Spec.TLS)
+	tls := c.copyTLS(source)
+	if len(tls) < 1 {
+		return nil
+	}
 	prefixWithNamespace(tls, source.Namespace)
 
 	controlIngress := c.ingressTemplate.CreateControlIngress(name, c.controlCtx.ResourceNamespace, tls)
@@ -46,10 +49,10 @@ func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) (*ex
 	logger.Infof("Creating Ingress resource %s.", name)
 	_, err := c.controlCtx.Client.Extensions().Ingresses(c.controlCtx.ResourceNamespace).Create(controlIngress)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	c.recorder.Event(source, corev1.EventTypeNormal, "Certificate", "Certificate request initiated")
-	return controlIngress, nil
+	return nil
 }
 
 // An ingress is considered outdated when the TLS information has changed on targetIng.
@@ -58,8 +61,7 @@ func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) (*ex
 func (c *Controller) updateIngress(targetIng, controlIng *extv1beta1.Ingress) error {
 	if !deepEqual(targetIng.Spec.TLS, controlIng.Spec.TLS, targetIng.Namespace) {
 		updatedIng := controlIng.DeepCopy()
-		updatedTLS := make([]extv1beta1.IngressTLS, len(targetIng.Spec.TLS))
-		copy(updatedTLS, targetIng.Spec.TLS)
+		updatedTLS := c.copyTLS(targetIng)
 		prefixWithNamespace(updatedTLS, targetIng.Namespace)
 		updatedIng.Spec.TLS = updatedTLS
 
@@ -90,4 +92,27 @@ func deepEqual(tls, prefixedTLS []extv1beta1.IngressTLS, namespace string) bool 
 	copy(tlsCopy, tls)
 	prefixWithNamespace(tlsCopy, namespace)
 	return reflect.DeepEqual(tlsCopy, prefixedTLS)
+}
+
+func (c *Controller) copyTLS(ing *extv1beta1.Ingress) []extv1beta1.IngressTLS {
+	var copiedTLS []extv1beta1.IngressTLS
+	for _, tls := range ing.Spec.TLS {
+		var copiedHosts []string
+		for _, host := range tls.Hosts {
+			for _, managedDomain := range c.managedDomains {
+				if strings.HasSuffix(host, managedDomain) {
+					copiedHosts = append(copiedHosts, host)
+					break
+				}
+				c.recorder.Eventf(ing, corev1.EventTypeNormal, "Certificate", "Domain %s is not managed and thus ignored by Cert-Broker", host)
+			}
+		}
+		if len(copiedHosts) > 0 {
+			copiedTLS = append(copiedTLS, extv1beta1.IngressTLS{
+				Hosts:      copiedHosts,
+				SecretName: tls.SecretName,
+			})
+		}
+	}
+	return copiedTLS
 }
