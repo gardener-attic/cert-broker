@@ -1,0 +1,35 @@
+cert-broker:
+  template: 'default'
+  base_definition:
+    repo: ~
+    traits:
+      version:
+        preprocess:
+          'inject-commit-hash'
+        inject_effective_version: true
+      publish:
+        dockerimages:
+          cert-broker:
+            registry: 'gcr-readwrite'
+            image: 'eu.gcr.io/gardener-project/gardener/cert-broker'
+            dockerfile: 'Dockerfile'
+            tag_as_latest: true
+    steps:
+      check:
+        image: 'golang:1.11.1'
+      test:
+        image: 'golang:1.11.1'
+  variants:
+    head-update:
+      traits:
+        component_descriptor: ~
+    pull-request:
+      traits:
+        pull-request: ~
+        component_descriptor: ~
+    release:
+      traits:
+        version:
+          preprocess: 'finalize'
+        release:
+          nextversion: 'bump_minor'
