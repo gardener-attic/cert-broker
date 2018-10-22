@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/gardener/cert-broker/cmd"
+	"github.com/gardener/cert-broker/pkg/version"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,6 +32,8 @@ func main() {
 	cmd := cmd.NewCertBroker(os.Stdout, os.Stderr, stopCh)
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 	flag.CommandLine.Parse([]string{})
+
+	log.Infof("### Cert-Broker %v ###", version.Version)
 
 	if err := cmd.Execute(); err != nil {
 		log.Errorf("an error occurred: %v\n", err)
