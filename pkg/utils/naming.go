@@ -24,6 +24,8 @@ import (
 const (
 	// GardenPurpose is the key of a label which is used for managed resources.
 	GardenPurpose = "garden.sapcloud.io/purpose"
+	// GardenCount is the key for count value
+	GardenCount = "garden.sapcloud.io/count"
 	// ManagedCert is a common identifier for Cert-Broker.
 	ManagedCert = "managed-cert"
 	// IngressRel is the key of a label which identifies the resource's Ingress relation.

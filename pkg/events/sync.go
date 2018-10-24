@@ -16,6 +16,7 @@ package events
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/gardener/cert-broker/pkg/common"
 	"github.com/gardener/cert-broker/pkg/utils"
@@ -57,6 +58,7 @@ type ControlClusterContext struct {
 	EventSync          cache.InformerSynced
 	CertificatesLister cache.GenericLister
 	CertificatesSync   cache.InformerSynced
+	Client             kubernetes.Interface
 }
 
 // TargetClusterContext holds information about the target cluster.
@@ -126,15 +128,26 @@ func (h *Handler) Sync(key string) error {
 			for _, ownerRef := range crt.GetOwnerReferences() {
 				if ownerRef.APIVersion == v1beta1.SchemeGroupVersion.String() && ownerRef.Kind == utils.IngressKind {
 					logger.Infof("Replicating event %s to target cluster", event.Name)
-					namespace, name := utils.SplitNamespace(ownerRef.Name)
-					targetIng, err := h.targetCtx.IngressLister.Ingresses(namespace).Get(name)
+					ingNamespace, ingName := utils.SplitNamespace(ownerRef.Name)
+					targetIng, err := h.targetCtx.IngressLister.Ingresses(ingNamespace).Get(ingName)
 					if err != nil {
 						if errors.IsNotFound(err) {
 							return nil
 						}
 						return err
 					}
+					logger.Infof("Creating event in target cluster for Ingress %s", targetIng.Name)
 					h.recorder.Event(targetIng, event.Type, event.Reason, event.Message)
+
+					updatedEvent := event.DeepCopy()
+					if updatedEvent.Annotations == nil {
+						updatedEvent.Annotations = make(map[string]string)
+					}
+					updatedEvent.Annotations[utils.GardenCount] = strconv.Itoa(int(event.Count))
+					_, err = h.controlCtx.Client.CoreV1().Events(namespace).Update(updatedEvent)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
