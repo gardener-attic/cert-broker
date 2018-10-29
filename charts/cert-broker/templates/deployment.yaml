@@ -44,14 +44,10 @@ spec:
           - --cleanup-workers={{ .Values.certbroker.cleanupWorkers }}
           - --cluster-issuer={{ .Values.certmanager.clusterissuer }}
           - --acme-challenge-type={{ .Values.certmanager.acmeChallengeType }}
-          - --acme-dns01-provider={{ .Values.certmanager.acmeDNS01Provider }}
           - --update-ingress={{ .Values.certmanager.updateIngress }}
           - --leader-election={{ .Values.certmanager.leaderElection }}
-          {{- if not .Values.certbroker.managedDomains }}
-          {{- required "Managed domains must be provided" .Values.certbroker.managedDomains }}
-          {{- end }}
-          {{- range .Values.certbroker.managedDomains }}
-          - --managed-domain={{ . }}
+          {{- range .Values.certbroker.dns }}
+          - --dns-providers={{ . }}
           {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}

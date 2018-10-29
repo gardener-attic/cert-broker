@@ -19,6 +19,7 @@ certbroker:
 certmanager:
   clusterissuer: "gardener-issuer"
   acmeChallengeType: "dns01"
-  acmeDNS01Provider: "route53"
   updateIngress: "true"
   leaderElection: "true"
+  dns:
+  - "example.com=route53-provider"

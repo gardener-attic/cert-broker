@@ -30,6 +30,9 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
+// DNSProviderKey is the key used for an Ingress annotation to provider for ACME DNS01 challenge.
+const DNSProviderKey = "certmanager.k8s.io/acme-dns01-provider"
+
 var ingressClass string
 
 // CreateIngressAnnotation creates the Cert-Manager annotation section for Ingress resources
@@ -42,12 +45,11 @@ type IngressTemplate struct {
 	dns01Provider string
 }
 
-// CreateIngressTemplate creates an instance of IngressTemplate
-func CreateIngressTemplate(issuerName, challengeType, dns01Provider string) *IngressTemplate {
+// CreateIngressTemplate creates an instance of IngressTemplate.
+func CreateIngressTemplate(issuerName, challengeType string) *IngressTemplate {
 	return &IngressTemplate{
 		issuerName:    issuerName,
 		challengeType: challengeType,
-		dns01Provider: dns01Provider,
 	}
 }
 
@@ -60,14 +62,15 @@ func (t *IngressTemplate) CreateIngressAnnotations() map[string]string {
 		"certmanager.k8s.io/acme-challenge-type": t.challengeType,
 	}
 	if len(t.dns01Provider) > 0 {
-		annotations["certmanager.k8s.io/acme-dns01-provider"] = t.dns01Provider
+		annotations[DNSProviderKey] = t.dns01Provider
 	}
 	return annotations
 }
 
 // CreateControlIngress creates an Ingress object which includes the given name, namespace and TLS info.
 // Further settings which are necessary for the control cluster are set by this method.
-func (t *IngressTemplate) CreateControlIngress(name, namespace string, tls []v1beta1.IngressTLS) *v1beta1.Ingress {
+func (t *IngressTemplate) CreateControlIngress(name, namespace, dnsProvider string, tls []v1beta1.IngressTLS) *v1beta1.Ingress {
+	t.dns01Provider = dnsProvider
 	ingress := v1beta1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,

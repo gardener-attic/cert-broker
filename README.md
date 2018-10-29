@@ -18,8 +18,7 @@ helm install charts/cert-broker \
     --name cert-broker \
     --set certbroker.namespace=<Namespace> \
     --set certbroker.targetClusterSecret=<Target cluster Kubeconfig> \
-    --set certmanager.acmeDNS01Provider=<Cert-Manager-DNS-Provider> \
-    --set certbroker.managedDomains="{"<Hosted Zone>"}"
+    --set certbroker.dns="{"<Domain>"."<DNS Provider>", "<Domain>"."<DNS Provider>"}"
 ```
 
 ## Limitations

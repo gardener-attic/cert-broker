@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -92,7 +91,6 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 	ingressTemplate := utils.CreateIngressTemplate(
 		cb.ControllerOptions.ClusterIssuer,
 		cb.ControllerOptions.AcmeChallengeType,
-		cb.ControllerOptions.AcmeDNS01Provider,
 	)
 
 	ingressController := ingress.NewController(
@@ -111,7 +109,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 			IngressSync:     targetClientInformerFactory.Extensions().V1beta1().Ingresses().Informer().HasSynced,
 		},
 		ingressTemplate,
-		cb.ControllerOptions.ManagedDomains,
+		cb.ControllerOptions.DomainToDNSProvider,
 	)
 
 	ingressCleaner := cleaner.NewController(
@@ -232,10 +230,6 @@ func (cb *CertBroker) validateControllerOptions() error {
 	}
 	if len(cb.ControllerOptions.AcmeChallengeType) < 1 {
 		return fmt.Errorf("ACME challenge type must be provided")
-	} else if strings.EqualFold(cb.ControllerOptions.AcmeChallengeType, defaultAcmeChallenge) {
-		if len(cb.ControllerOptions.AcmeDNS01Provider) < 1 {
-			return fmt.Errorf("DNS01 provider must be provided")
-		}
 	}
 	return nil
 }

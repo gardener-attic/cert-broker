@@ -38,13 +38,13 @@ func (c *Controller) cleanUpIngressAndSecrets(name string) error {
 func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) error {
 	// Prefix every secret name of the TLS section with the control cluster convention,
 	// so we can assign created secret in the control cluster back to target cluster.
-	tls := c.copyTLS(source)
+	tls, dnsProvider := c.copyTLS(source)
 	if len(tls) < 1 {
 		return nil
 	}
 	prefixWithNamespace(tls, source.Namespace)
 
-	controlIngress := c.ingressTemplate.CreateControlIngress(name, c.controlCtx.ResourceNamespace, tls)
+	controlIngress := c.ingressTemplate.CreateControlIngress(name, c.controlCtx.ResourceNamespace, dnsProvider, tls)
 
 	logger.Infof("Creating Ingress resource %s.", name)
 	_, err := c.controlCtx.Client.Extensions().Ingresses(c.controlCtx.ResourceNamespace).Create(controlIngress)
@@ -61,9 +61,10 @@ func (c *Controller) createIngress(name string, source *extv1beta1.Ingress) erro
 func (c *Controller) updateIngress(targetIng, controlIng *extv1beta1.Ingress) error {
 	if !deepEqual(targetIng.Spec.TLS, controlIng.Spec.TLS, targetIng.Namespace) {
 		updatedIng := controlIng.DeepCopy()
-		updatedTLS := c.copyTLS(targetIng)
+		updatedTLS, dnsProvider := c.copyTLS(targetIng)
 		prefixWithNamespace(updatedTLS, targetIng.Namespace)
 		updatedIng.Spec.TLS = updatedTLS
+		updatedIng.Annotations[utils.DNSProviderKey] = dnsProvider
 
 		logger.Infof("Updating Ingress resource %s.", controlIng.Name)
 
@@ -94,17 +95,27 @@ func deepEqual(tls, prefixedTLS []extv1beta1.IngressTLS, namespace string) bool 
 	return reflect.DeepEqual(tlsCopy, prefixedTLS)
 }
 
-func (c *Controller) copyTLS(ing *extv1beta1.Ingress) []extv1beta1.IngressTLS {
+func (c *Controller) copyTLS(ing *extv1beta1.Ingress) ([]extv1beta1.IngressTLS, string) {
 	var copiedTLS []extv1beta1.IngressTLS
+	var foundProvider string
 	for _, tls := range ing.Spec.TLS {
 		var copiedHosts []string
 		for _, host := range tls.Hosts {
-			for _, managedDomain := range c.managedDomains {
+			hostAdded := false
+			for managedDomain, provider := range c.domainToDNSProvider {
 				if strings.HasSuffix(host, managedDomain) {
+					if len(foundProvider) > 0 && foundProvider != provider {
+						c.recorder.Event(ing, corev1.EventTypeWarning, "Certificate", "Certificate cannot be requested because configured domains must be managed by exactly one provider.")
+						return nil, ""
+					}
+					foundProvider = provider
 					copiedHosts = append(copiedHosts, host)
+					hostAdded = true
 					break
 				}
-				c.recorder.Eventf(ing, corev1.EventTypeNormal, "Certificate", "Domain %s is not managed and thus ignored by Cert-Broker", host)
+			}
+			if !hostAdded {
+				c.recorder.Eventf(ing, corev1.EventTypeWarning, "Certificate", "Domain %s is not managed and thus ignored by Cert-Broker", host)
 			}
 		}
 		if len(copiedHosts) > 0 {
@@ -114,5 +125,5 @@ func (c *Controller) copyTLS(ing *extv1beta1.Ingress) []extv1beta1.IngressTLS {
 			})
 		}
 	}
-	return copiedTLS
+	return copiedTLS, foundProvider
 }

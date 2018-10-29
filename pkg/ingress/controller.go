@@ -38,13 +38,13 @@ var logger *log.Entry
 
 // Controller holds information about the traget and control cluster.
 type Controller struct {
-	controlCtx      *ControlClusterContext
-	targetCtx       *TargetClusterContext
-	ingressTemplate *utils.IngressTemplate
-	managedDomains  []string
-	workqueue       workqueue.RateLimitingInterface
-	recorder        record.EventRecorder
-	workerwg        sync.WaitGroup
+	controlCtx          *ControlClusterContext
+	targetCtx           *TargetClusterContext
+	ingressTemplate     *utils.IngressTemplate
+	domainToDNSProvider map[string]string
+	workqueue           workqueue.RateLimitingInterface
+	recorder            record.EventRecorder
+	workerwg            sync.WaitGroup
 }
 
 // ControlClusterContext holds information about the control cluster.
@@ -68,14 +68,14 @@ type TargetClusterContext struct {
 
 // NewController creates a new instance of Controller which in turn
 // is capable of replicating Ingress resources.
-func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext, ingressTemplate *utils.IngressTemplate, managedDomains []string) *Controller {
+func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext, ingressTemplate *utils.IngressTemplate, domainToDNSProvider map[string]string) *Controller {
 	controller := &Controller{
-		controlCtx:      controlCtx,
-		targetCtx:       targetCtx,
-		ingressTemplate: ingressTemplate,
-		managedDomains:  managedDomains,
-		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Ingresses"),
-		recorder:        utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Control"),
+		controlCtx:          controlCtx,
+		targetCtx:           targetCtx,
+		ingressTemplate:     ingressTemplate,
+		domainToDNSProvider: domainToDNSProvider,
+		workqueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Ingresses"),
+		recorder:            utils.CreateRecorder(targetCtx.Client, logger, "Cert-Broker-Ingress-Control"),
 	}
 	controller.targetCtx.IngressInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: utils.FilterOnIngressLables,
