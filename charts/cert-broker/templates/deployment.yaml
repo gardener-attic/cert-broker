@@ -46,8 +46,8 @@ spec:
           - --acme-challenge-type={{ .Values.certmanager.acmeChallengeType }}
           - --update-ingress={{ .Values.certmanager.updateIngress }}
           - --leader-election={{ .Values.certmanager.leaderElection }}
-          {{- range .Values.certbroker.dns }}
-          - --dns-providers={{ . }}
+          {{- range .Values.certmanager.dns }}
+          - --dns-providers="{{ .domain }}"="{{ .provider }}"
           {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
