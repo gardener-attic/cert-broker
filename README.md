@@ -16,9 +16,10 @@ To install Cert-Broker on the control cluster, fill out the place holders and ru
 ```
 helm install charts/cert-broker \
     --name cert-broker \
+    --namespace <Namespace> \
     --set certbroker.namespace=<Namespace> \
     --set certbroker.targetClusterSecret=<Target cluster Kubeconfig> \
-    --set certmanager.dns="{"<Domain>"."<DNS Provider>", "<Domain>"."<DNS Provider>"}"
+    --set certmanager.dns="{"<Domain>"."<DNS Provider>", "<Domain>"."<DNS Provider>"}" \
     --set certmanager.clusterissuer="<Issuer Name>"
 ```
 

@@ -70,7 +70,9 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 	}
 
 	targetClientInformerFactory := informers.NewSharedInformerFactory(targetClusterClient, time.Second*30)
-	controlClientInformerFactory := informers.NewSharedInformerFactory(controlClusterClient, time.Second*30)
+
+	resourceNamespaceOption := informers.WithNamespace(cb.ControllerOptions.ResourceNamespace)
+	controlClientInformerFactory := informers.NewSharedInformerFactoryWithOptions(controlClusterClient, time.Second*30, resourceNamespaceOption)
 
 	dynControlClient, err := dynamic.NewForConfig(controlClusterConfig)
 	if err != nil {
@@ -79,10 +81,10 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 
 	certificatesInformer := cache.NewSharedIndexInformer(&cache.ListWatch{
 		ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-			return dynControlClient.Resource(utils.CertGvr).List(options)
+			return dynControlClient.Resource(utils.CertGvr).Namespace(cb.ControllerOptions.ResourceNamespace).List(options)
 		},
 		WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-			return dynControlClient.Resource(utils.CertGvr).Watch(options)
+			return dynControlClient.Resource(utils.CertGvr).Namespace(cb.ControllerOptions.ResourceNamespace).Watch(options)
 		},
 	}, nil, time.Second*30, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 

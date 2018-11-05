@@ -1,8 +1,8 @@
 apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
-  name: {{ template "cert-broker.fullname" . }}
-  namespace: "{{ .Values.certbroker.namespace }}"
+  name: {{ template "cert-broker.name" . }}
+  namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "cert-broker.name" . }}
     chart: {{ template "cert-broker.chart" . }}
@@ -20,25 +20,18 @@ spec:
         app: {{ template "cert-broker.name" . }}
         release: {{ .Release.Name }}
     spec:
+      serviceAccountName: {{ template "cert-broker.name" . }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           volumeMounts:
-          {{- if .Values.certbroker.controlClusterSecret }}
-          - name: control-cluster
-            mountPath: "/etc/control-cluster"
-            readOnly: true
-          {{- end }}
           - name: target-cluster
             mountPath: "/etc/target-cluster"
             readOnly: true
           args:
-          {{- if .Values.certbroker.controlClusterSecret }}
-          - --control-cluster-kube-config=/etc/control-cluster/kubeconfig
-          {{- end }}
           - --target-cluster-kube-config=/etc/target-cluster/kubeconfig
-          - --resource-namespace={{ .Values.certbroker.namespace }}
+          - --resource-namespace={{ .Release.Namespace }}
           - --ingress-workers={{ .Values.certbroker.replicaWorkers }}
           - --secret-workers={{ .Values.certbroker.replicaWorkers }}
           - --cleanup-workers={{ .Values.certbroker.cleanupWorkers }}
@@ -52,11 +45,6 @@ spec:
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       volumes:
-      {{- if .Values.certbroker.controlClusterSecret }}
-      - name: control-cluster
-        secret:
-          secretName: {{ .Values.certbroker.controlClusterSecret }}
-      {{- end }}
       - name: target-cluster
         secret:
           secretName: {{ .Values.certbroker.targetClusterSecret }}
