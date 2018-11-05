@@ -22,28 +22,11 @@ import (
 	"github.com/gardener/cert-broker/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
-
-const controllerAgentName = "event-controller"
-
-var (
-	logger          *log.Entry
-	extensionScheme *runtime.Scheme
-)
-
-func init() {
-	logger = log.WithFields(log.Fields{"APP": controllerAgentName})
-	extensionScheme = runtime.NewScheme()
-	if err := v1beta1.AddToScheme(extensionScheme); err != nil {
-		panic(err)
-	}
-}
 
 // Handler is an interface which this generic controller uses for
 type Handler interface {
@@ -56,13 +39,15 @@ type Handler interface {
 type Controller struct {
 	Handler
 	workerwg sync.WaitGroup
+	logger   *log.Entry
 }
 
 // NewController creates a new instance of Controller which in turn
 // is capable of replicating Ingress resources.
-func NewController(handler Handler) *Controller {
+func NewController(handler Handler, logger *log.Entry) *Controller {
 	controller := &Controller{
 		Handler: handler,
+		logger:  logger,
 	}
 	return controller
 }
@@ -78,7 +63,7 @@ func certificateIsInvolved(obj interface{}) bool {
 // Start starts the control loop.
 func (c *Controller) Start(worker int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
-	logger.Debug("Waiting for informer caches to sync")
+	c.logger.Debug("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(
 		stopCh,
 		c.GetInformerSyncs()...,
@@ -86,19 +71,19 @@ func (c *Controller) Start(worker int, stopCh <-chan struct{}) error {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	logger.Info("Starting workers")
+	c.logger.Info("Starting workers")
 	for i := 0; i < worker; i++ {
 		c.workerwg.Add(1)
 		go wait.Until(c.runWorker, time.Second, stopCh)
-		logger.Debugf("Started worker %d", i)
+		c.logger.Debugf("Started worker %d", i)
 	}
-	logger.Debug("Started all workers")
+	c.logger.Debug("Started all workers")
 
 	<-stopCh
-	logger.Info("Shutting down workers")
+	c.logger.Info("Shutting down workers")
 	c.GetWorkQueue().ShutDown()
 	c.workerwg.Wait()
-	logger.Info("All workers have stopped processing")
+	c.logger.Info("All workers have stopped processing")
 	return nil
 }
 
@@ -129,13 +114,13 @@ func (c *Controller) processNextWorkItem() bool {
 			return fmt.Errorf("error syncing '%s': %s", key, err.Error())
 		}
 		c.GetWorkQueue().Forget(obj)
-		logger.Infof("Successfully synced '%s'", key)
+		c.logger.Infof("Successfully synced '%s'", key)
 		return nil
 	}(obj)
 
 	if err != nil {
 		utilruntime.HandleError(err)
-		logger.Infof("Re-queuing item '%v'", obj)
+		c.logger.Infof("Re-queuing item '%v'", obj)
 		c.GetWorkQueue().AddRateLimited(obj)
 		return true
 	}

@@ -81,7 +81,7 @@ func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterCo
 		FilterFunc: certificateIsInvolved,
 		Handler:    &EventHandler{Queue: handler.workqueue},
 	})
-	return common.NewController(handler)
+	return common.NewController(handler, logger)
 }
 
 func certificateIsInvolved(obj interface{}) bool {

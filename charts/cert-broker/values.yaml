@@ -17,8 +17,12 @@ certbroker:
   targetClusterSecret: "target-cluster"
 
 certmanager:
-  clusterissuer: "gardener-issuer"
+  clusterissuer: "issuer"
   acmeChallengeType: "dns01"
-  acmeDNS01Provider: "route53"
   updateIngress: "true"
-  leaderElection: "true"
+  leaderElection: "true"  
+  dns:
+  - domain: "example.com"
+    provider: "route53"
+  - domain: "example.org"
+    provider: "cloud-dns"

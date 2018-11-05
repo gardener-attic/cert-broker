@@ -30,7 +30,7 @@ const (
 	defaultAcmeChallenge        = "dns01"
 )
 
-var defaultManagedDomains = []string{}
+var defaultDNSProvider = map[string]string{}
 
 // Options represent configuration settings for a running instance of Cert-Broker.
 type Options struct {
@@ -39,8 +39,7 @@ type Options struct {
 	ResourceNamespace      string
 	ClusterIssuer          string
 	AcmeChallengeType      string
-	AcmeDNS01Provider      string
-	ManagedDomains         []string
+	DomainToDNSProvider    map[string]string
 	UpdateControlIngress   bool
 	LeaderElection         bool
 	IngressWorkerCount     uint
@@ -61,10 +60,6 @@ func (options *Options) addFlags(fs *pflag.FlagSet) {
 		"Name of cluster-issuer in control namespace")
 	fs.StringVar(&options.AcmeChallengeType, "acme-challenge-type", defaultAcmeChallenge, ""+
 		"ACME challenge type to be set in replicated Ingress")
-	fs.StringVar(&options.AcmeDNS01Provider, "acme-dns01-provider", "", ""+
-		"Name of the DNS01 provider if ACME challenge type is DNS01")
-	fs.StringArrayVar(&options.ManagedDomains, "managed-domain", defaultManagedDomains, ""+
-		"A list of domains being considerd by Cert-Broker. Domains apart from that list will be ignored.")
 	fs.BoolVar(&options.UpdateControlIngress, "update-ingress", defaultUpdateContronIngress, ""+
 		"Determins whether existing Ingress resources in the control cluster should be updated."+
 		"Needed if issuer information has changed.")
@@ -80,6 +75,8 @@ func (options *Options) addFlags(fs *pflag.FlagSet) {
 		"Worker count for the Ingress clean-up")
 	fs.UintVar(&options.EventWorkerCount, "event-workers", defaultWorkerCount, ""+
 		"Worker count for the Event propagation")
+	fs.StringToStringVar(&options.DomainToDNSProvider, "dns-providers", defaultDNSProvider, ""+
+		"Specifies the domains and providers used for DNS01 challenge. Only certificate request for these domains will be handled.")
 }
 
 // NewControllerOptions adds configured flags and returns a pointer to a newly created Options struct.
