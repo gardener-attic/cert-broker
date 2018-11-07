@@ -13,7 +13,6 @@ certbroker:
   namespace: "default"
   replicaWorkers: 4
   cleanupWorkers: 1
-  controlClusterSecret:
   targetClusterSecret: "target-cluster"
 
 certmanager:
@@ -26,3 +25,11 @@ certmanager:
     provider: "route53"
   - domain: "example.org"
     provider: "cloud-dns"
+
+resources:
+  # requests:
+  #   memory: "128Mi"
+  #   cpu: "250m"
+  # limits:
+  #   memory: "256Mi"
+  #   cpu: "250m"
