@@ -27,6 +27,7 @@ rules:
     - "events"
     verbs:
     - "get"
+    - "create"
     - "update"
     - "list"
     - "watch"
