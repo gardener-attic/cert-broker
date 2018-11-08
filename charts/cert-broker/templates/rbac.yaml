@@ -27,6 +27,7 @@ rules:
     - "events"
     verbs:
     - "get"
+    - "update"
     - "list"
     - "watch"
   - apiGroups:

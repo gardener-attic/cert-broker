@@ -1,8 +1,6 @@
 # cert-broker
 Cert-Broker is a complementary component for [Cert-Manager](https://github.com/jetstack/cert-manager). It enables certificate management for Kubernetes clusters which don't operate their own (in-cluster) Cert-Manager, e.g. for  organizational resposibilities the Cert-Manager is located in another cluster.
 
->Caution: This software is early alpha. It is not meant for production use yet.
-
 ## Concept
 To use or contribute to Cert-Broker it is fundamental to understand its main concept of control and target cluster.
 
@@ -17,7 +15,6 @@ To install Cert-Broker on the control cluster, fill out the place holders and ru
 helm install charts/cert-broker \
     --name cert-broker \
     --namespace <Namespace> \
-    --set certbroker.namespace=<Namespace> \
     --set certbroker.targetClusterSecret=<Target cluster Kubeconfig> \
     --set certmanager.dns="{"<Domain>"."<DNS Provider>", "<Domain>"."<DNS Provider>"}" \
     --set certmanager.clusterissuer="<Issuer Name>"
