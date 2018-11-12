@@ -33,3 +33,5 @@ cert-broker:
           preprocess: 'finalize'
         release:
           nextversion: 'bump_minor'
+        component_descriptor:
+          component_name: 'github.com/gardener/cert-broker'
