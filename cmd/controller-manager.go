@@ -140,8 +140,6 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		},
 		&secret.TargetClusterContext{
 			Client:        targetClusterClient,
-			SecretLister:  targetClientInformerFactory.Core().V1().Secrets().Lister(),
-			SecretSync:    targetClientInformerFactory.Core().V1().Secrets().Informer().HasSynced,
 			IngressLister: targetClientInformerFactory.Extensions().V1beta1().Ingresses().Lister(),
 			IngressSync:   targetClientInformerFactory.Extensions().V1beta1().Ingresses().Informer().HasSynced,
 		},

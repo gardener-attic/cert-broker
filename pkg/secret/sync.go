@@ -16,34 +16,36 @@ package secret
 
 import (
 	"fmt"
-	"sync"
-	"time"
 
+	"github.com/gardener/cert-broker/pkg/common"
 	"github.com/gardener/cert-broker/pkg/utils"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	extv1beta1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const controllerAgentName = "secret-controller"
 
 var logger *log.Entry
 
-// Controller holds information about the traget and control cluster.
-type Controller struct {
+func init() {
+	logger = log.WithFields(log.Fields{"APP": controllerAgentName})
+}
+
+// Handler holds information about the traget and control cluster.
+type Handler struct {
 	controlCtx *ControlClusterContext
 	targetCtx  *TargetClusterContext
 	workqueue  workqueue.RateLimitingInterface
-	workerwg   sync.WaitGroup
 }
 
 // ControlClusterContext holds information about the control cluster.
@@ -59,100 +61,48 @@ type ControlClusterContext struct {
 // TargetClusterContext holds information about the target cluster.
 type TargetClusterContext struct {
 	Client        kubernetes.Interface
-	SecretLister  v1.SecretLister
-	SecretSync    cache.InformerSynced
 	IngressLister v1beta1.IngressLister
 	IngressSync   cache.InformerSynced
 }
 
 // NewController creates a new instance of NewController which in turn
 // is capable of replicating Secrets.
-func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext) *Controller {
-	controller := &Controller{
+func NewController(controlCtx *ControlClusterContext, targetCtx *TargetClusterContext) *common.Controller {
+	handler := &Handler{
 		controlCtx: controlCtx,
 		targetCtx:  targetCtx,
 		workqueue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Secrets"),
 	}
 	controlClusterFilter := utils.ControlClusterResourceFilter{Namespace: controlCtx.ResourceNamespace}
-	controller.controlCtx.SecretInformer.AddEventHandler(cache.FilteringResourceEventHandler{
+	handler.controlCtx.SecretInformer.AddEventHandler(cache.FilteringResourceEventHandler{
 		FilterFunc: controlClusterFilter.FilterMethod(),
-		Handler:    &EventHandler{Queue: controller.workqueue},
+		Handler:    &EventHandler{Queue: handler.workqueue},
 	})
-	return controller
+	return common.NewController(handler, logger)
 }
 
-// Start starts the control loop.
-func (c *Controller) Start(worker int, stopCh <-chan struct{}) error {
-	defer runtime.HandleCrash()
-	logger.Debug("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(stopCh, c.targetCtx.SecretSync, c.controlCtx.SecretSync); !ok {
-		return fmt.Errorf("failed to wait for caches to sync")
-	}
-
-	logger.Info("Starting workers")
-	for i := 0; i < worker; i++ {
-		c.workerwg.Add(1)
-		go wait.Until(c.runWorker, time.Second, stopCh)
-		logger.Debugf("Started worker %d", i)
-	}
-	logger.Debug("Started all workers")
-
-	<-stopCh
-	logger.Info("Shutting down workers")
-	c.workqueue.ShutDown()
-	c.workerwg.Wait()
-	logger.Info("All workers have stopped processing")
-	return nil
+// GetWorkQueue gets the workqueue managed by this handler
+func (h *Handler) GetWorkQueue() workqueue.RateLimitingInterface {
+	return h.workqueue
 }
 
-func (c *Controller) runWorker() {
-	for c.processNextWorkItem() {
+// GetInformerSyncs gets the informer sync functions to be waited for
+// before using the handlers listers
+func (h *Handler) GetInformerSyncs() []cache.InformerSynced {
+	return []cache.InformerSynced{
+		h.controlCtx.SecretSync,
 	}
-	// Gracefully stopped worker.
-	c.workerwg.Done()
 }
 
-func (c *Controller) processNextWorkItem() bool {
-	obj, shutdown := c.workqueue.Get()
-
-	if shutdown {
-		return false
-	}
-
-	err := func(obj interface{}) error {
-		defer c.workqueue.Done(obj)
-		var key string
-		var ok bool
-		if key, ok = obj.(string); !ok {
-			c.workqueue.Forget(obj)
-			runtime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
-			return nil
-		}
-		if err := c.syncHandler(key); err != nil {
-			return fmt.Errorf("error syncing '%s': %s", key, err.Error())
-		}
-		c.workqueue.Forget(obj)
-		logger.Infof("Successfully synced '%s'", key)
-		return nil
-	}(obj)
-
-	if err != nil {
-		runtime.HandleError(err)
-		logger.Infof("Re-queuing item '%v'", obj)
-		c.workqueue.AddRateLimited(obj)
-		return true
-	}
-	return true
-}
-
-func (c *Controller) syncHandler(key string) error {
+// Sync handles actions for the passed reource key
+func (h *Handler) Sync(key string) error {
 	namespace, secretName, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
 
-	controlSecret, err := c.controlCtx.SecretLister.Secrets(namespace).Get(secretName)
+	controlSecret, err := h.controlCtx.SecretLister.Secrets(namespace).Get(secretName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
@@ -168,7 +118,7 @@ func (c *Controller) syncHandler(key string) error {
 		logger.Error("An error occurred while creating the label selector")
 		return err
 	}
-	availableIngresses, err := c.targetCtx.IngressLister.Ingresses(targetNamespace).List(selector)
+	availableIngresses, err := h.targetCtx.IngressLister.Ingresses(targetNamespace).List(selector)
 	if err != nil {
 		return err
 	}
@@ -178,14 +128,7 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
-	targetSecret, err := c.targetCtx.SecretLister.Secrets(targetNamespace).Get(targetSecretName)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return c.createSecret(controlSecret)
-		}
-		return err
-	}
-	return c.updateSecret(controlSecret, targetSecret)
+	return h.replicateSecretToTargetCluster(controlSecret)
 }
 
 func hasIngressInTargetCluster(ingresses []*extv1beta1.Ingress, secretName string) bool {
@@ -199,6 +142,23 @@ func hasIngressInTargetCluster(ingresses []*extv1beta1.Ingress, secretName strin
 	return false
 }
 
-func init() {
-	logger = log.WithFields(log.Fields{"APP": controllerAgentName})
+func (h *Handler) replicateSecretToTargetCluster(controlSecret *corev1.Secret) error {
+	namespace, name := utils.SplitNamespace(controlSecret.Name)
+	targetSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: controlSecret.Data,
+	}
+
+	logger.Infof("Creating / Updating secret %s/%s in target cluster", namespace, targetSecret.Name)
+	_, err := h.targetCtx.Client.Core().Secrets(namespace).Create(targetSecret)
+	if err != nil && apierrors.IsAlreadyExists(err) {
+		if _, err := h.targetCtx.Client.CoreV1().Secrets(targetSecret.Namespace).Update(targetSecret); err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
 }
