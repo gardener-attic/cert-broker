@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -32,7 +33,7 @@ const (
 	stdRetryPeiod    = 15 * time.Second
 )
 
-func (cb *CertBroker) runWithLeaderElection(run func(stopCh <-chan struct{}), controlClusterConfig *restclient.Config) error {
+func (cb *CertBroker) runWithLeaderElection(ctx context.Context, run func(context.Context), controlClusterConfig *restclient.Config) error {
 	leaderElectionClient, err := kubernetes.NewForConfig(controlClusterConfig)
 	if err != nil {
 		return fmt.Errorf("error getting clientset for leader election: %v", err)
@@ -52,8 +53,8 @@ func (cb *CertBroker) runWithLeaderElection(run func(stopCh <-chan struct{}), co
 	if err != nil {
 		return fmt.Errorf("couldn't create leader elector: %v", err)
 	}
-	leaderElector.Run()
-	return fmt.Errorf("lost lease")
+	leaderElector.Run(ctx)
+	return nil
 }
 
 func (cb *CertBroker) makeLeaderElectionConfig(client *kubernetes.Clientset) (*leaderelection.LeaderElectionConfig, error) {

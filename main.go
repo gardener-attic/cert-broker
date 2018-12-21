@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/signal"
@@ -27,9 +28,9 @@ import (
 
 func main() {
 
-	stopCh := SetupSignalHandler()
+	ctx := SetupSignalHandler()
 
-	cmd := cmd.NewCertBroker(os.Stdout, os.Stderr, stopCh)
+	cmd := cmd.NewCertBroker(ctx, os.Stdout, os.Stderr)
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 	flag.CommandLine.Parse([]string{})
 
@@ -45,21 +46,21 @@ func main() {
 var shutdownSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 var onlyOneSignalHandler = make(chan struct{})
 
-// SetupSignalHandler registered for SIGTERM and SIGINT. A stop channel is returned
+// SetupSignalHandler registered for SIGTERM and SIGINT. A context is returned
 // which is closed on one of these signals. If a second signal is caught, the program
 // is terminated with exit code 1.
-func SetupSignalHandler() (stopCh <-chan struct{}) {
+func SetupSignalHandler() context.Context {
 	close(onlyOneSignalHandler) // panics when called twice
 
-	stop := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, shutdownSignals...)
 	go func() {
 		<-c
-		close(stop)
+		cancel()
 		<-c
 		os.Exit(1) // second signal. Exit directly.
 	}()
 
-	return stop
+	return ctx
 }

@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -39,7 +40,7 @@ import (
 )
 
 // AppName holds the name of the application.
-const AppName = "cert-borker"
+const AppName = "cert-broker"
 
 var logger *log.Entry
 
@@ -48,7 +49,8 @@ type CertBroker struct {
 	ControllerOptions *Options
 }
 
-func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struct{}) error {
+func (cb *CertBroker) startCertBorker(ctx context.Context, out, errOut io.Writer) error {
+
 	targetClusterConfig, err := clientcmd.BuildConfigFromFlags("", cb.ControllerOptions.TargetClusterKubeconf)
 	if err != nil {
 		return fmt.Errorf("error getting config instance for target cluster: %v", err)
@@ -160,18 +162,17 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 			IngressSync:   targetClientInformerFactory.Extensions().V1beta1().Ingresses().Informer().HasSynced,
 		},
 	)
+	var controllerWg sync.WaitGroup
 
-	run := func(_ <-chan struct{}) {
-		targetClientInformerFactory.Start(stopCh)
-		controlClientInformerFactory.Start(stopCh)
-		go certificatesInformer.Run(stopCh)
-
-		var controllerWg sync.WaitGroup
+	run := func(ctx context.Context) {
+		targetClientInformerFactory.Start(ctx.Done())
+		controlClientInformerFactory.Start(ctx.Done())
+		go certificatesInformer.Run(ctx.Done())
 
 		go func() {
 			defer controllerWg.Done()
 			controllerWg.Add(1)
-			if err := ingressController.Start(int(cb.ControllerOptions.IngressWorkerCount), stopCh); err != nil {
+			if err := ingressController.Start(int(cb.ControllerOptions.IngressWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the ingress controller: %v", err)
 			}
 		}()
@@ -179,7 +180,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		go func() {
 			defer controllerWg.Done()
 			controllerWg.Add(1)
-			if err := secretController.Start(int(cb.ControllerOptions.SecretWorkerCount), stopCh); err != nil {
+			if err := secretController.Start(int(cb.ControllerOptions.SecretWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the secret controller: %v", err)
 			}
 		}()
@@ -187,7 +188,7 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		go func() {
 			defer controllerWg.Done()
 			controllerWg.Add(1)
-			if err := ingressCleaner.Start(int(cb.ControllerOptions.CleanupWorkerCount), stopCh); err != nil {
+			if err := ingressCleaner.Start(int(cb.ControllerOptions.CleanupWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the ingress cleaner: %v", err)
 			}
 		}()
@@ -195,26 +196,23 @@ func (cb *CertBroker) startCertBorker(out, errOut io.Writer, stopCh <-chan struc
 		go func() {
 			defer controllerWg.Done()
 			controllerWg.Add(1)
-			if err := eventController.Start(int(cb.ControllerOptions.EventWorkerCount), stopCh); err != nil {
+			if err := eventController.Start(int(cb.ControllerOptions.EventWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the event controlle: %v", err)
 			}
 		}()
 
-		<-stopCh
-		controllerWg.Wait()
-
-		// Gracefully exit application if K8s leader election is used.
-		if cb.ControllerOptions.LeaderElection {
-			os.Exit(0)
-		}
+		<-ctx.Done()
 	}
 
 	if cb.ControllerOptions.LeaderElection {
-		return cb.runWithLeaderElection(run, controlClusterConfig)
+		err := cb.runWithLeaderElection(ctx, run, controlClusterConfig)
+		controllerWg.Wait()
+		return err
 	}
 
 	// Start controllers if K8s leader election is not used.
-	run(stopCh)
+	run(ctx)
+	controllerWg.Wait()
 
 	return nil
 }
@@ -235,7 +233,7 @@ func (cb *CertBroker) validateControllerOptions() error {
 }
 
 // NewCertBroker returns a new instance to run the Cert-Broker.
-func NewCertBroker(out, errOut io.Writer, stopCh <-chan struct{}) *cobra.Command {
+func NewCertBroker(ctx context.Context, out, errOut io.Writer) *cobra.Command {
 
 	var cb CertBroker
 
@@ -248,7 +246,7 @@ Subsequently the generated certificate, i.e. Kubernetes secret, is copied back t
 			if err := cb.validateControllerOptions(); err != nil {
 				return err
 			}
-			return cb.startCertBorker(out, errOut, stopCh)
+			return cb.startCertBorker(ctx, out, errOut)
 		},
 	}
 
