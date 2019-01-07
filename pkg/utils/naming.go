@@ -56,13 +56,6 @@ var CertGvr = schema.GroupVersionResource{
 	Resource: CertificateResource,
 }
 
-// CertGvr is the Group, Version, Kind information for Cert-Manager's Certificate
-// var CertGvk = schema.GroupVersionKind{
-// 	Group:   CertManagerGroup,
-// 	Version: CertificateVersion,
-// 	Kind:    CertificateKind,
-// }
-
 // SplitNamespace cuts out the namespaces and name portion of the given string.
 // The string must have a format used by the control cluster,
 // i.e. "cert-broker.<target-cluster-namespace>.<name>"

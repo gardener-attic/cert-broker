@@ -14,14 +14,6 @@
 //				(idea is if you say import "compress/zlib", you go to
 //				http://godoc/pkg/compress/zlib)
 //
-// Command-line interface:
-//
-//	godoc packagepath [name ...]
-//
-//	godoc compress/zlib
-//		- prints doc for package compress/zlib
-//	godoc crypto/block Cipher NewCMAC
-//		- prints doc for Cipher and NewCMAC in package crypto/block
 
 // +build !golangorg
 
@@ -80,7 +72,7 @@ var (
 	// layout control
 	showTimestamps = flag.Bool("timestamps", false, "show timestamps with directory listings")
 	templateDir    = flag.String("templates", "", "load templates/JS/CSS from disk in this directory")
-	showPlayground = flag.Bool("play", false, "enable playground in web interface")
+	showPlayground = flag.Bool("play", false, "enable playground")
 	declLinks      = flag.Bool("links", true, "link identifiers to their declarations")
 
 	// search index
@@ -171,15 +163,13 @@ func main() {
 
 	playEnabled = *showPlayground
 
-	// Check usage: server and no args.
-	if (*httpAddr != "" || *urlFlag != "") && (flag.NArg() > 0) {
-		fmt.Fprintln(os.Stderr, "Unexpected arguments.")
+	// Check usage.
+	if flag.NArg() > 0 {
+		fmt.Fprintln(os.Stderr, `Unexpected arguments. Use "go doc" for command-line help output instead. For example, "go doc fmt.Printf".`)
 		usage()
 	}
-
-	// Check usage: command line args or index creation mode.
-	if (*httpAddr != "" || *urlFlag != "") != (flag.NArg() == 0) && !*writeIndex {
-		fmt.Fprintln(os.Stderr, "missing args.")
+	if *httpAddr != "" && *urlFlag != "" && !*writeIndex {
+		fmt.Fprintln(os.Stderr, "Missing args.")
 		usage()
 	}
 
