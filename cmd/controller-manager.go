@@ -169,39 +169,37 @@ func (cb *CertBroker) startCertBorker(ctx context.Context, out, errOut io.Writer
 		controlClientInformerFactory.Start(ctx.Done())
 		go certificatesInformer.Run(ctx.Done())
 
+		controllerWg.Add(1)
 		go func() {
 			defer controllerWg.Done()
-			controllerWg.Add(1)
 			if err := ingressController.Start(int(cb.ControllerOptions.IngressWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the ingress controller: %v", err)
 			}
 		}()
 
+		controllerWg.Add(1)
 		go func() {
 			defer controllerWg.Done()
-			controllerWg.Add(1)
 			if err := secretController.Start(int(cb.ControllerOptions.SecretWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the secret controller: %v", err)
 			}
 		}()
 
+		controllerWg.Add(1)
 		go func() {
 			defer controllerWg.Done()
-			controllerWg.Add(1)
 			if err := ingressCleaner.Start(int(cb.ControllerOptions.CleanupWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the ingress cleaner: %v", err)
 			}
 		}()
 
+		controllerWg.Add(1)
 		go func() {
 			defer controllerWg.Done()
-			controllerWg.Add(1)
 			if err := eventController.Start(int(cb.ControllerOptions.EventWorkerCount), ctx.Done()); err != nil {
 				logger.Errorf("error starting the event controlle: %v", err)
 			}
 		}()
-
-		<-ctx.Done()
 	}
 
 	if cb.ControllerOptions.LeaderElection {
