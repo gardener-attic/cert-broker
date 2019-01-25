@@ -16,9 +16,9 @@ cert-broker:
             tag_as_latest: true
     steps:
       check:
-        image: 'golang:1.11.1'
+        image: 'golang:1.11.5'
       test:
-        image: 'golang:1.11.1'
+        image: 'golang:1.11.5'
   variants:
     head-update:
       traits:
