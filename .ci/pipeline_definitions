@@ -19,7 +19,7 @@ cert-broker:
         image: 'golang:1.11.5'
       test:
         image: 'golang:1.11.5'
-  variants:
+  jobs:
     head-update:
       traits:
         component_descriptor: ~
